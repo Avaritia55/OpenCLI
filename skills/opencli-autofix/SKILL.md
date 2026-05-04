@@ -1,6 +1,6 @@
 ---
 name: opencli-autofix
-description: Automatically fix broken OpenCLI adapters when commands fail. Load this skill when an opencli command fails — it guides you through collecting a trace artifact, patching the adapter, retrying, and filing an upstream GitHub issue after a verified fix. Works with any AI agent.
+description: 當 opencli 命令失敗時使用。此 skill 會引導你收集 trace artifact、修補 adapter、重試，並在驗證修復後提交 upstream GitHub issue。適用於任何 AI agent。
 allowed-tools: Bash(opencli:*), Bash(gh:*), Read, Edit, Write
 ---
 

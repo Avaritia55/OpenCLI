@@ -1,6 +1,6 @@
 ---
 name: opencli-usage
-description: Use at the start of any OpenCLI session — this is the top-level map of what `opencli` can do, how to discover adapters, what flags and output formats are universal, and which specialized skill to load next. Point here when an agent asks "what can opencli do?" or "how do I find the right command?".
+description: 在任何 OpenCLI session 開始時使用——這是 `opencli` 能做什麼、如何探索 adapter、有哪些通用旗標與輸出格式，以及下一步該載入哪個專門 skill 的頂層導覽。當 agent 問 "what can opencli do?" 或 "how do I find the right command?" 時指向此處。
 allowed-tools: Bash(opencli:*), Read
 ---
 
