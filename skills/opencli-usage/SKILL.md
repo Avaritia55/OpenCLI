@@ -8,6 +8,14 @@ allowed-tools: Bash(opencli:*), Read
 
 OpenCLI turns any website, Electron desktop app, or external CLI into a uniform `opencli <site> <command>` surface that agents can drive without screen-scraping. This skill is the orientation layer — once you know what you want to do, load one of the specialized skills below.
 
+## Checkpoints
+
+Before taking action, confirm with the user at these decision points:
+
+1. **Browser-dependent task?** → If the target adapter strategy is `COOKIE`/`HEADER`/`INTERCEPT`/`UI`, tell the user "This requires Chrome + the OpenCLI extension. Run `opencli doctor` first to verify setup." Wait for confirmation before proceeding.
+2. **Which specialized skill?** → Before loading `opencli-browser`, `opencli-autofix`, or `opencli-adapter-author`, tell the user which skill you recommend and why. "I recommend loading [skill] because [reason]. Proceed?"
+3. **External CLI install?** → `opencli install <name>` makes system-level changes. Confirm with the user before running any install/register command.
+
 ## The three pillars
 
 - **Adapter commands** — `opencli <site> <command> [...]`. Built-in adapters live in `clis/`, user adapters in `~/.opencli/clis/`. Each is backed by a strategy (`PUBLIC | COOKIE | INTERCEPT | UI | LOCAL`) that tells you whether a Chrome session is needed.
