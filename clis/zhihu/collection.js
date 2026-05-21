@@ -170,11 +170,11 @@ cli({
       nextOffset = fallbackOffset;
       if (totals && nextOffset >= totals) break;
     }
-    
+
     // 计算总页数
     const totalPages = Math.ceil(totals / pageLimit);
     const currentPage = Math.floor(pageOffset / pageLimit) + 1;
-    
+
     // 输出统计信息
     if (totals > 0) {
       log.info(`收藏夹共有 ${totals} 条内容，共 ${totalPages} 页`);

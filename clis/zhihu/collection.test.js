@@ -49,7 +49,7 @@ describe('zhihu collection', () => {
     const page = { goto, evaluate };
 
     const result = await cmd.func(page, { id: '83283292', offset: 0, limit: 20 });
-    
+
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({
       rank: 1,
@@ -86,7 +86,7 @@ describe('zhihu collection', () => {
     const page = { goto: vi.fn().mockResolvedValue(undefined), evaluate };
 
     const result = await cmd.func(page, { id: '83283292', offset: 0, limit: 20 });
-    
+
     expect(result[0]).toMatchObject({
       type: 'article',
       title: 'Test Article',
@@ -116,7 +116,7 @@ describe('zhihu collection', () => {
     const page = { goto: vi.fn().mockResolvedValue(undefined), evaluate };
 
     const result = await cmd.func(page, { id: '83283292', offset: 0, limit: 20 });
-    
+
     expect(result[0]).toMatchObject({
       type: 'pin',
       title: '想法',
@@ -206,7 +206,7 @@ describe('zhihu collection', () => {
     const page = { goto: vi.fn().mockResolvedValue(undefined), evaluate };
 
     const result = await cmd.func(page, { id: '83283292', offset: 40, limit: 20 });
-    
+
     expect(result[0].rank).toBe(41); // offset 40 + index 0 + 1
     expect(evaluate).toHaveBeenCalledWith(
       expect.stringContaining('offset=40'),
