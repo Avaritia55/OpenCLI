@@ -1,6 +1,12 @@
 ---
 name: opencli-usage
 description: 在任何 OpenCLI session 開始時使用——這是 `opencli` 能做什麼、如何探索 adapter、有哪些通用旗標與輸出格式，以及下一步該載入哪個專門 skill 的頂層導覽。當 agent 問 "what can opencli do?" 或 "how do I find the right command?" 時指向此處。
+triggers:
+  - "opencli"
+  - "what can opencli do"
+  - "OpenCLI usage"
+  - "opencli command"
+  - "how do I find the right command"
 allowed-tools: Bash(opencli:*), Read
 ---
 

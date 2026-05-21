@@ -1,6 +1,12 @@
 ---
 name: opencli-adapter-author
 description: 當為新網站撰寫 OpenCLI adapter，或為既有網站新增命令時使用。從偵察到欄位解碼、adapter 編寫與驗證的端到端指南。取代 opencli-oneshot / opencli-explorer。如需臨時驅動瀏覽器（無 adapter），請參見 opencli-browser；如需 opencli 頂層導覽，請參見 opencli-usage。
+triggers:
+  - "write OpenCLI adapter"
+  - "OpenCLI adapter"
+  - "新增 OpenCLI command"
+  - "opencli browser verify"
+  - "adapter author"
 allowed-tools: Bash(opencli:*), Read, Edit, Write, Grep
 ---
 
