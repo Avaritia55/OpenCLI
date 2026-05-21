@@ -1,6 +1,13 @@
 ---
 name: opencli-browser
-description: Use when an agent needs to drive a real Chrome window via opencli — inspect a page, fill forms, click through logged-in flows, or extract data ad-hoc. Covers the selector-first target contract, compound form fields, stale-ref handling, network capture, and the agent-native envelopes the CLI returns. Not for writing adapters — see opencli-adapter-author for that.
+description: OpenCLI 瀏覽器自動化。網頁操作、截圖、表單填寫。
+triggers:
+  - /opencli-browser
+  - "opencli browser"
+  - "填表單"
+  - "瀏覽器自動化"
+  - "網頁截圖"
+  - "browser automation"
 allowed-tools: Bash(opencli:*), Read, Edit, Write
 ---
 
@@ -22,11 +29,7 @@ Rules:
 
 # opencli-browser
 
-The first reader of this CLI is an agent, not a human. Every subcommand returns a structured envelope that tells you exactly what matched, how confident the match is, and what to do if it didn't. Lean on those envelopes — do not guess.
-
-This skill is for **driving a live browser** to accomplish an agent task. If you are building a reusable adapter under `~/.opencli/clis/<site>/` use `opencli-adapter-author` instead.
-
----
+Drives a live Chrome browser session. Every subcommand returns a structured envelope — lean on those, do not guess.
 
 ## Prerequisites
 
@@ -34,152 +37,70 @@ This skill is for **driving a live browser** to accomplish an agent task. If you
 opencli doctor
 ```
 
-Until `doctor` is green, nothing else will work. Typical failures: Chrome not running, extension not installed, debug port blocked by 1Password / other extensions. The doctor output tells you which.
+Until `doctor` is green, nothing else works. Fix reported issues: Chrome not running, extension missing, debug port blocked.
 
----
+## Session Lifecycle
 
-## Lease lifecycle
+- All `browser *` commands require `--session <name>`. Same name for multi-step flows; different name for parallel isolation.
+- Release with `opencli browser --session <name> close` or let idle timeout expire.
+- `opencli browser bind --session <name>` — bind to an existing logged-in tab (SSO flows, manual positioning). Fails closed if tab navigates away or becomes non-debuggable.
 
-- `opencli browser *` commands keep an owned tab lease alive between calls. Owned leases share a dedicated automation container and are released with `opencli browser close` or when the idle timeout expires.
-- `opencli browser bind` binds a `bound:*` workspace to the Chrome tab you already have open. Use this for logged-in pages, SSO flows, or pages you manually positioned before handing control to the agent.
-- `--focus` (or `OPENCLI_WINDOW_FOCUSED=1`) opens the automation container in the foreground. Use it when you want to watch the page live.
-- `--live` (or `OPENCLI_LIVE=1`) is mainly for browser-backed adapter commands such as `opencli xiaohongshu note ...`. It keeps the adapter's automation lease open after the command returns so you can inspect the final page state.
+## Mental Model
 
-### Bind Tab
+1. **Selector-first target.** Every interaction command takes `<target>`: numeric ref from `state`/`find`, or CSS selector + `--nth`.
+2. **Every envelope reports `match_level`.** `exact` → proceed; `stable` → proceed + verify write; `reidentified` → double-check before chaining more writes.
+3. **Compact output first.** Use `--json`, `--depth`, `--children-max`; never emit giant payloads.
+4. **Structured errors.** `{error: {code, message, hint?}}` — branch on `code`, not message strings.
 
-```bash
-opencli browser bind --domain example.com
-opencli browser --workspace bound:default state
-opencli browser --workspace bound:default click "Search"
-opencli browser --workspace bound:default network
-opencli browser unbind
-```
+## Critical Rules
 
-Binding uses a separate `bound:*` workspace. It never owns the user window, never closes the user tab, and fails closed if the tab is closed or becomes non-debuggable. Re-run `bind` when you switch to a different real tab.
+1. **Inspect before act.** Run `state` or `find` first. Never hard-code refs across sessions — indices are per-snapshot.
+2. **Prefer numeric ref over CSS** once you have it — survives mild DOM drift.
+3. **Verify writes.** After `type`, run `get value`. Autocomplete/React inputs silently eat characters.
+4. **`state` → action → `state` after page changes.** Navigations and SPA route changes invalidate refs.
+5. **Chain with `&&`.** Separate shell invocations lose session context.
+6. **`eval` is read-only.** Use `click`/`type`/`select`/`keys` for mutations.
+7. **Prefer `network` over scraping.** If the page fetches a JSON API, intercept that instead.
+8. **Use depth limits.** Full `state` on large pages burns context fast.
 
-Use `--domain <host>` and `--path-prefix <path>` to avoid binding the wrong tab:
+## Key Commands
 
-```bash
-opencli browser bind --workspace bound:gmail --domain mail.google.com --path-prefix /mail
-opencli browser --workspace bound:gmail state
-```
-
-Navigation is blocked by default on bound workspaces because it can destroy the logged-in/positioned state you wanted to preserve. `browser open` and `browser back` require `--allow-navigate-bound`; tab mutation (`tab new`, `tab select`, `tab close`) is blocked for bound workspaces. Use a normal `browser:*` automation workspace when you want OpenCLI to own tab lifecycle.
-
-`opencli browser sessions` returns `idleMsRemaining: null` for bound workspaces. That means there is no OpenCLI idle-close timer; the binding lasts until `unbind`, tab close, window close, or daemon restart.
-
----
-
-## Mental model
-
-1. **Selector-first target contract.** Every interaction command (`click`, `type`, `select`, `get text/value/attributes`) takes one `<target>`, which is *either* a numeric ref from `state`/`find` *or* a CSS selector. Use `--nth <n>` to disambiguate multiple CSS matches.
-2. **Every envelope reports `matches_n` and `match_level`.** `match_level` is `exact`, `stable`, or `reidentified` — the CLI already rescued moderate DOM drift for you, but the level tells you how confident to be.
-3. **Compact output first, full payload on demand.** `state` is a budget-aware snapshot; `get html --as json` supports `--depth/--children-max/--text-max`; `network` returns shape previews and you re-fetch a single body with `--detail <key>`. If you emit a giant payload you are burning context you did not need to burn.
-4. **Structured errors are machine-readable.** On failure the CLI emits `{error: {code, message, hint?, candidates?}}`. Branch on `code`, not on message strings.
-
----
-
-## Critical rules
-
-1. **Always inspect before you act.** Run `state` or `find` first. Never hard-code a ref or selector from memory across sessions — indices are per-snapshot.
-2. **Prefer numeric ref over CSS once you have it.** Numeric refs survive mild DOM shifts because the CLI fingerprints each tagged element. A CSS selector written by hand will break the first time the site re-renders.
-3. **Read `match_level` after every write.** `exact` = all good. `stable` = the element is the same but some soft attrs drifted — your action still applied. `reidentified` = the original ref was gone and the CLI found a unique replacement; double-check you hit the right element.
-4. **Use the `compound` field for form controls.** Do not regex-guess a date format, do not `state` twice to get the full `<select>` options list. The compound envelope has the format string, full option list up to 50, `options_total` for overflow, and `accept`/`multiple` for `<input type=file>`.
-5. **Verify writes that matter.** After `type <target> <text>`, run `get value <target>`. After `select`, run `get value`. Autocomplete widgets, React controlled inputs, and masked fields all silently eat characters. The CLI cannot detect this for you.
-6. **`state` → action → `state` after a page change.** Navigations, form submits, and SPA route changes invalidate refs. Take a fresh snapshot. Do not reuse refs from before the transition.
-7. **Chain with `&&`.** A chained sequence runs in one shell so refs acquired by the first command stay live for the second. Separate shell invocations lose the session context you just set up.
-8. **`eval` is read-only.** Wrap the JS in an IIFE and return JSON. If you need to *change* the page, use the structured `click` / `type` / `select` / `keys` commands instead — they produce structured output and fingerprints, `eval` does not.
-9. **Prefer `network` to screen-scraping.** If a page you care about fetches its data from a JSON API, the API is almost always more reliable than scraping the rendered DOM. Capture once, inspect the shape, then `--detail <key>` the body you need.
-
----
-
-## Target contract (`<target>` for click / type / select / get text|value|attributes)
-
-```
-<target> ::= <numeric-ref> | <css-selector>
-```
-
-- **Numeric ref** — the `[N]` index from `state` or `find`. Cheap, resilient to soft DOM drift.
-- **CSS selector** — anything `querySelectorAll` accepts. Must be unambiguous on write ops, or pair with `--nth <n>`.
-
-### Envelope on success
-
-```json
-{ "clicked": true, "target": "3", "matches_n": 1, "match_level": "exact" }
-```
-
-```json
-{ "value": "kalevin@example.com", "matches_n": 1, "match_level": "stable" }
-```
-
-### match_level
-
-| level | meaning | you should |
-|-------|---------|------------|
-| `exact` | Fingerprint agreed on tag + strong IDs with at most one soft drift | Proceed. |
-| `stable` | Tag + strong IDs still agree, soft signals (aria-label, role, text) drifted | Proceed, but if *what* you typed/clicked matters, re-check with `get value` or `state`. |
-| `reidentified` | Original ref was gone; a unique live element matched the fingerprint and was re-tagged with the old ref | Double-check you hit the right element before chaining more writes. |
-
-### Structured error codes
-
-Branch on these, not on the human message:
-
-| code | meaning |
-|------|---------|
-| `not_found` | Numeric ref is no longer in the DOM. Re-`state`. |
-| `stale_ref` | Ref exists but the element at that ref changed identity. Re-`state`. |
-| `invalid_selector` | CSS was rejected by `querySelectorAll`. Fix the selector. |
-| `selector_not_found` | CSS matches 0 elements. Try `find` with a looser selector. |
-| `selector_ambiguous` | CSS matches >1 and no `--nth`. Add `--nth` or narrow the selector. |
-| `selector_nth_out_of_range` | `--nth` beyond match count. |
-| `option_not_found` | `select` couldn't find an option matching that label/value. Error envelope includes `available: string[]` of the real option labels. |
-| `not_a_select` | `select` was called on a non-`<select>` element. |
-
-Error envelope always includes `error.code` and `error.message`. Target errors (`selector_not_found`, `selector_ambiguous`, etc.) often add `error.candidates: string[]` with suggested selectors. `option_not_found` adds `error.available: string[]` instead.
-
----
-
-## Command reference
-
-### Inspect
-
-| command | purpose |
+| Purpose | Command |
 |---------|---------|
-| `browser state` | Snapshot: text tree with `[N]` refs, scroll hints, hidden-interactive hints, `compounds (N):` sidecar for date/select/file refs. |
-| `browser find --css <sel> [--limit N] [--text-max N]` | Run a CSS query and return one entry per match with `{nth, ref, tag, role, text, attrs, visible, compound?}`. Allocates refs for matches the prior snapshot didn't tag. Cheap alternative to `state` when you already know the selector. |
-| `browser frames` | List cross-origin iframe targets. Pass the index to `--frame` on `eval`. |
-| `browser screenshot [path]` | Viewport PNG. No path → base64 to stdout. Prefer `state` when you just need structure. |
+| Snapshot (refs) | `browser state --session <n>` |
+| Find element | `browser find --css <sel>` / `browser find --role <r> --name <n>` |
+| Click / Type / Select | `browser click <ref>` / `browser type <ref> <text>` / `browser select <ref> <option>` |
+| Verify value | `browser get value <ref>` |
+| Navigate / Wait | `browser navigate <url>` / `browser wait selector <css>` |
+| Network capture | `browser network` / `browser network --detail <key>` |
+| JS (read-only) | `browser eval "<iife>" --json` |
+| Tabs | `browser tab list` / `browser tab select <id>` |
+| Bind / Unbind | `browser bind --session <n>` / `browser unbind --session <n>` |
 
-### Get (read-only)
+Full command reference (all flags, interact/wait/extract/network): `references/command-ref.md`
+Compound form controls, recipes, cost guide, pitfalls: `references/recipes.md`
 
-| command | returns |
-|---------|---------|
-| `browser get title` | plain text |
-| `browser get url` | plain text |
-| `browser get text <target> [--nth N]` | `{value, matches_n, match_level}` |
-| `browser get value <target> [--nth N]` | `{value, matches_n, match_level}` |
-| `browser get attributes <target> [--nth N]` | `{value: {attr: val, ...}, matches_n, match_level}` |
-| `browser get html [--selector <css>] [--as html\|json] [--depth N] [--children-max N] [--text-max N] [--max N]` | Raw HTML, or structured tree. JSON tree nodes have `{tag, attrs, text, children[], compound?}`. Truncation reported via `truncated: {depth?, children_dropped?, text_truncated?}`. |
+## 異常處理
 
-### Interact
+| code | meaning | fix |
+|------|---------|-----|
+| `not_found` / `stale_ref` | Ref gone or changed identity | Re-run `state` |
+| `selector_not_found` | CSS matches 0 elements | Check `error.candidates[]` |
+| `selector_ambiguous` | CSS matches >1 without `--nth` | Add `--nth` or narrow selector |
+| `option_not_found` | Select option missing | Check `error.available[]` |
 
-| command | notes |
-|---------|-------|
-| `browser click <target> [--nth N]` | Returns `{clicked, target, matches_n, match_level}`. |
-| `browser type <target> <text> [--nth N]` | Clicks first, then types. Returns `{typed, text, target, matches_n, match_level, autocomplete}`. `autocomplete: true` means a combobox/datalist popup appeared after typing — you almost always need `keys Enter` or a follow-up `click` on the suggestion to commit the value. |
-| `browser select <target> <option> [--nth N]` | Matches option by label first, then value. Use `compound` from `find`/`state` to see exactly what labels are available. |
-| `browser keys <key>` | `Enter`, `Escape`, `Tab`, `Control+a`, etc. Runs against the focused element. |
-| `browser scroll <direction> [--amount px]` | `up` / `down`. Default amount `500`. |
+- `opencli doctor` fails → fix listed issue before any browser commands; do not attempt workarounds
+- Stale ref after navigation → re-run `state`, never reuse old refs
+- `eval` needed for mutation → use structured `click`/`type`/`select`/`keys` instead
+- Parallel browser sessions → use distinct `--session` names; never share across concurrent flows
+- Cross-origin iframe → try `--source ax`; success is best-effort (Chrome OOPIF limitation)
+- `autocomplete: true` on `type` response → value not committed; send `keys Enter` or click suggestion
 
-### Wait
+## 檢查點
 
-```bash
-browser wait selector "<css>" [--timeout ms]    # wait until the selector matches
-browser wait text "<substring>" [--timeout ms]  # wait until the text appears
-browser wait time <seconds>                     # hard sleep, last resort
-```
+**[CONFIRM]** Before form submits, logins, or multi-step destructive sequences: show the commands that will run and confirm intent with user.
 
-Default timeout `10000` ms. SPA routes, login redirects, and lazy-loaded lists need `wait` before `state`/`get`.
+## eval Usage Policy
 
 ### Extract
 
